@@ -2,18 +2,40 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Настройки, чтобы игра не зумилась при тапах на смартфоне -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Flappy Bird Mini App</title>
+    <!-- Подключаем официальный скрипт Telegram WebApp -->
     <script src="https://telegram.org"></script>
     <style>
-        body { margin: 0; background: #70c5ce; overflow: hidden; font-family: sans-serif; text-align: center; }
-        canvas { display: block; margin: 0 auto; background: #70c5ce; width: 100vw; height: 100vh; }
-
+        * {
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        body { 
+            margin: 0; 
+            padding: 0;
+            background: #70c5ce; 
+            overflow: hidden; 
+            font-family: sans-serif; 
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+        canvas { 
+            display: block; 
+            background: #70c5ce; 
+            width: 100vw; 
+            height: 100vh; 
+        }
     </style>
 </head>
 <body>
-    <canvas id="game" width="320" height="480"></canvas>
+    <canvas id="game"></canvas>
     <script>
+        // Инициализируем Telegram WebApp и раскрываем на весь экран
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
@@ -21,164 +43,150 @@
         const canvas = document.getElementById("game");
         const ctx = canvas.getContext("2d");
 
-        let bird = { x: 50, y: 150, v: 0, r: 12, g: 0.25, jump: -4.6 };
+        // Динамически подстраиваем размер игрового поля под экран устройства
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Настройки птички (размеры адаптируются под высоту экрана)
+        let bird = { 
+            x: canvas.width * 0.2, 
+            y: canvas.height * 0.4, 
+            v: 0, 
+            r: Math.min(canvas.width, canvas.height) * 0.035, // адаптивный радиус
+            g: canvas.height * 0.00045, // гравитация зависит от высоты
+            jump: canvas.height * -0.0085 // сила прыжка зависит от высоты
+        };
+        
         let pipes = [];
         let score = 0;
         let gameOver = false;
+        const pipeWidth = Math.min(canvas.width * 0.15, 60);
 
         function spawnPipe() {
-            let gap = 120;
-            let topHeight = Math.random() * (canvas.height - gap - 100) + 30;
-            pipes.push({ x: canvas.width, top: topHeight, bottom: canvas.height - topHeight - gap });
+            // Просвет между трубами, в который должна пролететь птичка
+            let gap = Math.min(canvas.height * 0.25, 140);
+            let minHeight = 50;
+            let maxHeight = canvas.height - gap - minHeight;
+            let topHeight = Math.random() * (maxHeight - minHeight) + minHeight;
+            
+            pipes.push({ 
+                x: canvas.width, 
+                top: topHeight, 
+                bottom: canvas.height - topHeight - gap 
+            });
         }
+        
+        // Создаем первую трубу
         spawnPipe();
 
         function reset() {
-            bird.y = 150; bird.v = 0; pipes = []; score = 0; gameOver = false; spawnPipe();
+            bird.y = canvas.height * 0.4; 
+            bird.v = 0; 
+            pipes = []; 
+            score = 0; 
+            gameOver = false; 
+            spawnPipe();
         }
 
-        window.addEventListener("touchstart", () => { 
-            if(gameOver) reset(); else bird.v = bird.jump; 
-        });
-        window.addEventListener("mousedown", () => { 
-            if(gameOver) reset(); else bird.v = bird.jump; 
-        });
+        // Обработка касаний экрана (для смартфонов и ПК)
+        function handleJump(e) {
+            e.preventDefault();
+            if (gameOver) {
+                reset();
+            } else {
+                bird.v = bird.jump; 
+            }
+        }
+
+        window.addEventListener("touchstart", handleJump, { passive: false });
+        window.addEventListener("mousedown", handleJump);
 
         function loop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
+            
+            // Физика птицы
             if (!gameOver) {
                 bird.v += bird.g;
                 bird.y += bird.v;
             }
+            
+            // Рисуем птицу (оранжевый кружок)
             ctx.fillStyle = "#f39c12";
-            ctx.beginPath(); ctx.arc(bird.x, bird.y, bird.r, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); 
+            ctx.arc(bird.x, bird.y, bird.r, 0, Math.PI * 2); 
+            ctx.fill();
 
-            if (bird.y + bird.r > canvas.height || bird.y - bird.r < 0) gameOver = true;
+            // Проверка на удар о землю или потолок
+            if (bird.y + bird.r > canvas.height || bird.y - bird.r < 0) {
+                gameOver = true;
+            }
 
+            // Скорость движения труб подбирается под ширину экрана
+            const speed = Math.max(canvas.width * 0.005, 2.5);
+
+            // Движение и отрисовка труб
             for (let i = pipes.length - 1; i >= 0; i--) {
-                if (!gameOver) pipes[i].x -= 2;
+                if (!gameOver) pipes[i].x -= speed;
 
                 ctx.fillStyle = "#2ecc71";
-                ctx.fillRect(pipes[i].x, 0, 50, pipes[i].top);
-                ctx.fillRect(pipes[i].x, canvas.height - pipes[i].bottom, 50, pipes[i].bottom);
+                // Верхняя труба
+                ctx.fillRect(pipes[i].x, 0, pipeWidth, pipes[i].top);
+                // Нижняя труба
+                ctx.fillRect(pipes[i].x, canvas.height - pipes[i].bottom, pipeWidth, pipes[i].bottom);
 
-                if (bird.x + bird.r > pipes[i].x && bird.x - bird.r < pipes[i].x + 50) {
+                // Проверка столкновения птицы с краями труб
+                if (bird.x + bird.r > pipes[i].x && bird.x - bird.r < pipes[i].x + pipeWidth) {
                     if (bird.y - bird.r < pipes[i].top || bird.y + bird.r > canvas.height - pipes[i].bottom) {
                         gameOver = true;
                     }
                 }
 
-                if (pipes[i].x === 30 && !gameOver) { score++; }
-                if (pipes[i].x < -50) pipes.splice(i, 1);
-            }
-
-            if (pipes.length > 0 && pipes[pipes.length - 1].x < canvas.width - 160) spawnPipe();
-
-            ctx.fillStyle = "#fff"; ctx.font = "24px sans-serif";
-            ctx.fillText("Счет: " + score, 20, 40);
-
-            if (gameOver) {
-                ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0,0,canvas.width,canvas.height);
-                ctx.fillStyle = "#fff"; ctx.font = "30px sans-serif";
-                ctx.fillText("Игра окончена", 60, canvas.height/2);
-                ctx.font = "16px sans-serif";
-                ctx.fillText("Нажми, чтобы начать заново", 50, canvas.height/2 + 40);
-            }
-            requestAnimationFrame(loop);
-        }
-        loop();
-    </script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird Mini App</title>
-    <script src="https://telegram.org"></script>
-    <style>
-        body { margin: 0; background: #70c5ce; overflow: hidden; font-family: sans-serif; text-align: center; }
-        canvas { display: block; margin: 0 auto; background: #70c5ce; max-width: 100%; max-height: 100vh; }
-    </style>
-</head>
-<body>
-    <canvas id="game" width="320" height="480"></canvas>
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-
-        const canvas = document.getElementById("game");
-        const ctx = canvas.getContext("2d");
-
-        let bird = { x: 50, y: 150, v: 0, r: 12, g: 0.25, jump: -4.6 };
-        let pipes = [];
-        let score = 0;
-        let gameOver = false;
-
-        function spawnPipe() {
-            let gap = 120;
-            let topHeight = Math.random() * (canvas.height - gap - 100) + 30;
-            pipes.push({ x: canvas.width, top: topHeight, bottom: canvas.height - topHeight - gap });
-        }
-        spawnPipe();
-
-        function reset() {
-            bird.y = 150; bird.v = 0; pipes = []; score = 0; gameOver = false; spawnPipe();
-        }
-
-        window.addEventListener("touchstart", () => { 
-            if(gameOver) reset(); else bird.v = bird.jump; 
-        });
-        window.addEventListener("mousedown", () => { 
-            if(gameOver) reset(); else bird.v = bird.jump; 
-        });
-
-        function loop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            if (!gameOver) {
-                bird.v += bird.g;
-                bird.y += bird.v;
-            }
-            ctx.fillStyle = "#f39c12";
-            ctx.beginPath(); ctx.arc(bird.x, bird.y, bird.r, 0, Math.PI*2); ctx.fill();
-
-            if (bird.y + bird.r > canvas.height || bird.y - bird.r < 0) gameOver = true;
-
-            for (let i = pipes.length - 1; i >= 0; i--) {
-                if (!gameOver) pipes[i].x -= 2;
-
-                ctx.fillStyle = "#2ecc71";
-                ctx.fillRect(pipes[i].x, 0, 50, pipes[i].top);
-                ctx.fillRect(pipes[i].x, canvas.height - pipes[i].bottom, 50, pipes[i].bottom);
-
-                if (bird.x + bird.r > pipes[i].x && bird.x - bird.r < pipes[i].x + 50) {
-                    if (bird.y - bird.r < pipes[i].top || bird.y + bird.r > canvas.height - pipes[i].bottom) {
-                        gameOver = true;
-                    }
+                // Начисление очков при пролёте трубы
+                if (pipes[i].x + pipeWidth < bird.x && !pipes[i].counted && !gameOver) {
+                    score++;
+                    pipes[i].counted = true;
                 }
 
-                if (pipes[i].x === 30 && !gameOver) { score++; }
-                if (pipes[i].x < -50) pipes.splice(i, 1);
+                // Удаляем трубы, которые вылетели за левый край экрана
+                if (pipes[i].x < -pipeWidth) {
+                    pipes.splice(i, 1);
+                }
             }
 
-            if (pipes.length > 0 && pipes[pipes.length - 1].x < canvas.width - 160) spawnPipe();
+            // Интервал между трубами подстраивается под ширину экрана
+            const pipeInterval = canvas.width * 0.55;
+            if (pipes.length > 0 && pipes[pipes.length - 1].x < canvas.width - pipeInterval) {
+                spawnPipe();
+            }
 
-            ctx.fillStyle = "#fff"; ctx.font = "24px sans-serif";
-            ctx.fillText("Счет: " + score, 20, 40);
+            // Вывод текущего счета сверху
+            ctx.fillStyle = "#fff"; 
+            ctx.font = "bold 26px sans-serif";
+            ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+            ctx.shadowBlur = 4;
+            ctx.fillText("Счет: " + score, 20, 50);
+            ctx.shadowBlur = 0; // сброс тени
 
+            // Экран окончания игры
             if (gameOver) {
-                ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0,0,canvas.width,canvas.height);
-                ctx.fillStyle = "#fff"; ctx.font = "30px sans-serif";
-                ctx.fillText("Игра окончена", 60, canvas.height/2);
-                ctx.font = "16px sans-serif";
-                ctx.fillText("Нажми, чтобы начать заново", 50, canvas.height/2 + 40);
+                ctx.fillStyle = "rgba(0,0,0,0.6)"; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = "#fff"; 
+                ctx.textAlign = "center";
+                
+                ctx.font = "bold 32px sans-serif";
+                ctx.fillText("Игра окончена", canvas.width / 2, canvas.height / 2 - 20);
+                
+                ctx.font = "18px sans-serif";
+                ctx.fillText("Нажми на экран для перезапуска", canvas.width / 2, canvas.height / 2 + 30);
+                
+                ctx.textAlign = "left"; // сброс выравнивания
             }
+            
             requestAnimationFrame(loop);
         }
+        
         loop();
     </script>
 </body>
